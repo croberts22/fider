@@ -1,197 +1,149 @@
-import React from "react";
-import { Comment, Post, ImageUpload } from "@fider/models";
-import {
-  Avatar,
-  UserName,
-  Moment,
-  Form,
-  TextArea,
-  Button,
-  MultiLineText,
-  DropDown,
-  DropDownItem,
-  Modal,
-  ImageViewer,
-  MultiImageUploader
-} from "@fider/components";
-import { formatDate, Failure, actions, Fider } from "@fider/services";
-import { FaEllipsisH } from "react-icons/fa";
+import React, { useState } from "react"
+import { Comment, Post, ImageUpload } from "@fider/models"
+import { Avatar, UserName, Moment, Form, TextArea, Button, Markdown, Modal, ImageViewer, MultiImageUploader, Dropdown, Icon } from "@fider/components"
+import { HStack } from "@fider/components/layout"
+import { formatDate, Failure, actions } from "@fider/services"
+import { useFider } from "@fider/hooks"
+import IconDotsHorizontal from "@fider/assets/images/heroicons-dots-horizontal.svg"
+import { Trans } from "@lingui/macro"
 
 interface ShowCommentProps {
-  post: Post;
-  comment: Comment;
+  post: Post
+  comment: Comment
 }
 
-interface ShowCommentState {
-  comment: Comment;
-  isEditing: boolean;
-  newContent: string;
-  attachments: ImageUpload[];
-  error?: Failure;
-  showDeleteConfirmation: boolean;
-}
+export const ShowComment = (props: ShowCommentProps) => {
+  const fider = useFider()
+  const [isEditing, setIsEditing] = useState(false)
+  const [newContent, setNewContent] = useState("")
+  const [isDeleteConfirmationModalOpen, setIsDeleteConfirmationModalOpen] = useState(false)
+  const [attachments, setAttachments] = useState<ImageUpload[]>([])
+  const [error, setError] = useState<Failure>()
 
-export class ShowComment extends React.Component<ShowCommentProps, ShowCommentState> {
-  constructor(props: ShowCommentProps) {
-    super(props);
-    this.state = {
-      comment: props.comment,
-      isEditing: false,
-      newContent: "",
-      showDeleteConfirmation: false,
-      attachments: []
-    };
-  }
-
-  private canEditComment(comment: Comment): boolean {
-    if (Fider.session.isAuthenticated) {
-      return Fider.session.user.isCollaborator || comment.user.id === Fider.session.user.id;
+  const canEditComment = (): boolean => {
+    if (fider.session.isAuthenticated) {
+      return fider.session.user.isCollaborator || props.comment.user.id === fider.session.user.id
     }
-    return false;
+    return false
   }
 
-  private cancelEdit = async () => {
-    this.setState({
-      isEditing: false,
-      newContent: "",
-      error: undefined
-    });
-  };
+  const clearError = () => setError(undefined)
 
-  private saveEdit = async () => {
-    const response = await actions.updateComment(
-      this.props.post.number,
-      this.state.comment.id,
-      this.state.newContent,
-      this.state.attachments
-    );
+  const cancelEdit = async () => {
+    setIsEditing(false)
+    setNewContent("")
+    clearError()
+  }
+
+  const saveEdit = async () => {
+    const response = await actions.updateComment(props.post.number, props.comment.id, newContent, attachments)
     if (response.ok) {
-      location.reload();
+      location.reload()
     } else {
-      this.setState({ error: response.error });
+      setError(response.error)
     }
-  };
+  }
 
-  private setNewContent = (newContent: string) => {
-    this.setState({ newContent });
-  };
+  const closeModal = async () => {
+    setIsDeleteConfirmationModalOpen(false)
+  }
 
-  private setAttachments = (attachments: ImageUpload[]) => {
-    this.setState({ attachments });
-  };
-
-  private renderEllipsis = () => {
-    return <FaEllipsisH />;
-  };
-
-  private closeModal = async () => {
-    this.setState({ showDeleteConfirmation: false });
-  };
-
-  private deleteComment = async () => {
-    const response = await actions.deleteComment(this.props.post.number, this.props.comment.id);
+  const deleteComment = async () => {
+    const response = await actions.deleteComment(props.post.number, props.comment.id)
     if (response.ok) {
-      location.reload();
+      location.reload()
     }
-  };
+  }
 
-  private onActionSelected = (item: DropDownItem) => {
-    if (item.value === "edit") {
-      this.setState({ isEditing: true, newContent: this.state.comment.content, error: undefined });
-    } else if (item.value === "delete") {
-      this.setState({ showDeleteConfirmation: true });
+  const onActionSelected = (action: string) => () => {
+    if (action === "edit") {
+      setIsEditing(true)
+      setNewContent(props.comment.content)
+      clearError()
+    } else if (action === "delete") {
+      setIsDeleteConfirmationModalOpen(true)
     }
-  };
+  }
 
-  private modal() {
+  const modal = () => {
     return (
-      <Modal.Window isOpen={this.state.showDeleteConfirmation} center={false} size="small">
-        <Modal.Header>Delete Comment</Modal.Header>
+      <Modal.Window isOpen={isDeleteConfirmationModalOpen} onClose={closeModal} center={false} size="small">
+        <Modal.Header>
+          <Trans id="modal.deletecomment.header">Delete Comment</Trans>
+        </Modal.Header>
         <Modal.Content>
           <p>
-            This process is irreversible. <strong>Are you sure?</strong>
+            <Trans id="modal.deletecomment.text">
+              This process is irreversible. <strong>Are you sure?</strong>
+            </Trans>
           </p>
         </Modal.Content>
 
         <Modal.Footer>
-          <Button color="danger" onClick={this.deleteComment}>
-            Delete
+          <Button variant="danger" onClick={deleteComment}>
+            <Trans id="action.delete">Delete</Trans>
           </Button>
-          <Button color="cancel" onClick={this.closeModal}>
-            Cancel
+          <Button variant="tertiary" onClick={closeModal}>
+            <Trans id="action.cancel">Cancel</Trans>
           </Button>
         </Modal.Footer>
       </Modal.Window>
-    );
+    )
   }
 
-  public render() {
-    const c = this.state.comment;
+  const comment = props.comment
 
-    const editedMetadata = !!c.editedAt && !!c.editedBy && (
-      <div className="c-comment-metadata">
-        <span title={`This comment has been edited by ${c.editedBy!.name} on ${formatDate(c.editedAt)}`}>· edited</span>
+  const editedMetadata = !!comment.editedAt && !!comment.editedBy && (
+    <span data-tooltip={`This comment has been edited by ${comment.editedBy.name} on ${formatDate(fider.currentLocale, comment.editedAt)}`}>· edited</span>
+  )
+
+  return (
+    <HStack spacing={2} center={false} className="c-comment flex-items-baseline">
+      {modal()}
+      <div className="pt-4">
+        <Avatar user={comment.user} />
       </div>
-    );
-
-    return (
-      <div className="c-comment">
-        {this.modal()}
-        <Avatar user={c.user} />
-        <div className="c-comment-content">
-          <UserName user={c.user} />
-          <div className="c-comment-metadata">
-            · <Moment date={c.createdAt} />
-          </div>
-          {editedMetadata}
-          {!this.state.isEditing && this.canEditComment(c) && (
-            <DropDown
-              className="l-more-actions"
-              direction="left"
-              inline={true}
-              style="simple"
-              highlightSelected={false}
-              items={[
-                { label: "Edit", value: "edit" },
-                { label: "Delete", value: "delete", render: <span style={{ color: "red" }}>Delete</span> }
-              ]}
-              onChange={this.onActionSelected}
-              renderControl={this.renderEllipsis}
-            />
-          )}
-          <div className="c-comment-text">
-            {this.state.isEditing ? (
-              <Form error={this.state.error}>
-                <TextArea
-                  field="content"
-                  minRows={1}
-                  value={this.state.newContent}
-                  placeholder={c.content}
-                  onChange={this.setNewContent}
-                />
-                <MultiImageUploader
-                  field="attachments"
-                  bkeys={c.attachments}
-                  maxUploads={2}
-                  previewMaxWidth={100}
-                  onChange={this.setAttachments}
-                />
-                <Button size="tiny" onClick={this.saveEdit} color="positive">
-                  Save
-                </Button>
-                <Button color="cancel" size="tiny" onClick={this.cancelEdit}>
-                  Cancel
-                </Button>
-              </Form>
-            ) : (
-              <>
-                <MultiLineText text={c.content} style="simple" />
-                {c.attachments && c.attachments.map(x => <ImageViewer key={x} bkey={x} />)}
-              </>
+      <div className="flex-grow bg-gray-50 rounded-md p-2">
+        <div className="mb-1">
+          <HStack justify="between">
+            <HStack>
+              <UserName user={comment.user} />{" "}
+              <div className="text-xs">
+                · <Moment locale={fider.currentLocale} date={comment.createdAt} /> {editedMetadata}
+              </div>
+            </HStack>
+            {!isEditing && canEditComment() && (
+              <Dropdown position="left" renderHandle={<Icon sprite={IconDotsHorizontal} width="16" height="16" />}>
+                <Dropdown.ListItem onClick={onActionSelected("edit")}>
+                  <Trans id="action.edit">Edit</Trans>
+                </Dropdown.ListItem>
+                <Dropdown.ListItem onClick={onActionSelected("delete")} className="text-red-700">
+                  <Trans id="action.delete">Delete</Trans>
+                </Dropdown.ListItem>
+              </Dropdown>
             )}
-          </div>
+          </HStack>
+        </div>
+        <div>
+          {isEditing ? (
+            <Form error={error}>
+              <TextArea field="content" minRows={1} value={newContent} placeholder={comment.content} onChange={setNewContent} />
+              <MultiImageUploader field="attachments" bkeys={comment.attachments} maxUploads={2} onChange={setAttachments} />
+              <Button size="small" onClick={saveEdit} variant="primary">
+                <Trans id="action.save">Save</Trans>
+              </Button>
+              <Button variant="tertiary" size="small" onClick={cancelEdit}>
+                <Trans id="action.cancel">Cancel</Trans>
+              </Button>
+            </Form>
+          ) : (
+            <>
+              <Markdown text={comment.content} style="full" />
+              {comment.attachments && comment.attachments.map((x) => <ImageViewer key={x} bkey={x} />)}
+            </>
+          )}
         </div>
       </div>
-    );
-  }
+    </HStack>
+  )
 }

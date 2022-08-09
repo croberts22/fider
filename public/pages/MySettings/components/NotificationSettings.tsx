@@ -1,136 +1,145 @@
-import React from "react";
+import React, { useState } from "react"
 
-import { UserSettings } from "@fider/models";
-import { Toggle, Segment, Segments, Field } from "@fider/components";
-import { Fider } from "@fider/services";
+import { UserSettings } from "@fider/models"
+import { Toggle, Field } from "@fider/components"
+import { useFider } from "@fider/hooks"
+import { HStack, VStack } from "@fider/components/layout"
+import { t, Trans } from "@lingui/macro"
 
 interface NotificationSettingsProps {
-  userSettings: UserSettings;
-  settingsChanged: (settings: UserSettings) => void;
+  userSettings: UserSettings
+  settingsChanged: (settings: UserSettings) => void
 }
 
-interface NotificationSettingsState {
-  userSettings: UserSettings;
-}
+type Channel = number
+const WebChannel: Channel = 1
+const EmailChannel: Channel = 2
 
-type Channel = number;
-const WebChannel: Channel = 1;
-const EmailChannel: Channel = 2;
+export const NotificationSettings = (props: NotificationSettingsProps) => {
+  const fider = useFider()
+  const [userSettings, setUserSettings] = useState(props.userSettings)
 
-export class NotificationSettings extends React.Component<NotificationSettingsProps, NotificationSettingsState> {
-  constructor(props: NotificationSettingsProps) {
-    super(props);
-
-    this.state = {
-      userSettings: this.props.userSettings
-    };
-  }
-
-  private isEnabled(settingsKey: string, channel: Channel): boolean {
-    if (settingsKey in this.state.userSettings) {
-      return (parseInt(this.state.userSettings[settingsKey], 10) & channel) > 0;
+  const isEnabled = (settingsKey: string, channel: Channel): boolean => {
+    if (settingsKey in userSettings) {
+      return (parseInt(userSettings[settingsKey], 10) & channel) > 0
     }
-    return false;
+    return false
   }
 
-  private async toggle(settingsKey: string, channel: Channel) {
-    const userSettings = { ...this.state.userSettings };
-    userSettings[settingsKey] = (parseInt(this.state.userSettings[settingsKey], 10) ^ channel).toString();
-
-    this.setState({ userSettings });
-    this.props.settingsChanged(userSettings);
+  const toggle = async (settingsKey: string, channel: Channel) => {
+    const nextSettings = {
+      ...userSettings,
+      [settingsKey]: (parseInt(userSettings[settingsKey], 10) ^ channel).toString(),
+    }
+    setUserSettings(nextSettings)
+    props.settingsChanged(nextSettings)
   }
 
-  private icon(settingsKey: string, channel: Channel) {
-    const active = this.isEnabled(settingsKey, channel);
-    const label = channel === WebChannel ? "Web" : "Email";
-    return (
-      <Toggle
-        key={`${settingsKey}_${channel}`}
-        active={active}
-        label={label}
-        onToggle={this.toggle.bind(this, settingsKey, channel)}
-      />
-    );
+  const labelWeb = t({ id: "mysettings.notification.channelweb", message: "Web" })
+  const labelEmail = t({ id: "mysettings.notification.channelemail", message: "Email" })
+
+  const icon = (settingsKey: string, channel: Channel) => {
+    const active = isEnabled(settingsKey, channel)
+    const label = channel === WebChannel ? labelWeb : labelEmail
+    const onToggle = () => toggle(settingsKey, channel)
+    return <Toggle key={`${settingsKey}_${channel}`} active={active} label={label} onToggle={onToggle} />
   }
 
-  private info(settingsKey: string, aboutForVisitors: string, aboutForCollaborators: string) {
-    const about = Fider.session.user.isCollaborator ? aboutForCollaborators : aboutForVisitors;
-    const webEnabled = this.isEnabled(settingsKey, WebChannel);
-    const emailEnabled = this.isEnabled(settingsKey, EmailChannel);
+  const info = (settingsKey: string, aboutForVisitors: string, aboutForCollaborators: string) => {
+    const about = fider.session.user.isCollaborator ? aboutForCollaborators : aboutForVisitors
+    const webEnabled = isEnabled(settingsKey, WebChannel)
+    const emailEnabled = isEnabled(settingsKey, EmailChannel)
 
     if (!webEnabled && !emailEnabled) {
       return (
-        <p className="info">
-          You'll <strong>NOT</strong> receive any notification about this event.
+        <p className="text-muted">
+          <Trans id="mysettings.notification.message.none">
+            You&apos;ll <strong>NOT</strong> receive any notification about this event.
+          </Trans>
         </p>
-      );
+      )
     } else if (webEnabled && !emailEnabled) {
       return (
-        <p className="info">
-          You'll receive <strong>web</strong> notifications about {about}.
+        <p className="text-muted">
+          <Trans id="mysettings.notification.message.webonly">
+            You&apos;ll receive <strong>web</strong> notifications about {about}.
+          </Trans>
         </p>
-      );
+      )
     } else if (!webEnabled && emailEnabled) {
       return (
-        <p className="info">
-          You'll receive <strong>email</strong> notifications about {about}.
+        <p className="text-muted">
+          <Trans id="mysettings.notification.message.emailonly">
+            You&apos;ll receive <strong>email</strong> notifications about {about}.
+          </Trans>
         </p>
-      );
+      )
     } else if (webEnabled && emailEnabled) {
       return (
-        <p className="info">
-          You'll receive <strong>web</strong> and <strong>email</strong> notifications about {about}.
+        <p className="text-muted">
+          <Trans id="mysettings.notification.message.webandemail">
+            You&apos;ll receive <strong>web</strong> and <strong>email</strong> notifications about {about}.
+          </Trans>
         </p>
-      );
+      )
     }
-    return null;
+    return null
   }
 
-  public render() {
-    return (
-      <>
-        <Field label="Notifications">
-          <p className="info">Use following panel to choose which events you'd like to receive notification</p>
-        </Field>
+  return (
+    <>
+      <Field label="Notifications">
+        <p className="text-muted">
+          <Trans id="mysettings.notification.title">Use following panel to choose which events you&apos;d like to receive notification</Trans>
+        </p>
 
         <div className="notifications-settings">
-          <Segments>
-            <Segment>
-              <span className="event-title">New Post</span>
-              {this.info("event_notification_new_post", "new posts on this site", "new posts on this site")}
-              <p>
-                {this.icon("event_notification_new_post", WebChannel)}
-                {this.icon("event_notification_new_post", EmailChannel)}
-              </p>
-            </Segment>
-            <Segment>
-              <span className="event-title">Discussion</span>
-              {this.info(
+          <VStack spacing={4} divide={true} className="p-2 bg-gray-50 rounded">
+            <div>
+              <div className="mb-1">
+                <Trans id="mysettings.notification.event.newpost">New Post</Trans>
+              </div>
+              {info(
+                "event_notification_new_post",
+                t({ id: "mysettings.notification.event.newpost.visitors", message: "new posts on this site" }),
+                t({ id: "mysettings.notification.event.newpost.staff", message: "new posts on this site" })
+              )}
+              <HStack spacing={6}>
+                {icon("event_notification_new_post", WebChannel)}
+                {icon("event_notification_new_post", EmailChannel)}
+              </HStack>
+            </div>
+            <div>
+              <div className="mb-1">
+                <Trans id="mysettings.notification.event.discussion">Discussion</Trans>
+              </div>
+              {info(
                 "event_notification_new_comment",
-                "comments on posts you've subscribed to",
-                "comments on all posts unless individually unsubscribed"
+                t({ id: "mysettings.notification.event.discussion.visitors", message: "comments on posts you've subscribed to" }),
+                t({ id: "mysettings.notification.event.discussion.staff", message: "comments on all posts unless individually unsubscribed" })
               )}
-              <p>
-                {this.icon("event_notification_new_comment", WebChannel)}
-                {this.icon("event_notification_new_comment", EmailChannel)}
-              </p>
-            </Segment>
-            <Segment>
-              <span className="event-title">Status Changed</span>
-              {this.info(
+              <HStack spacing={6}>
+                {icon("event_notification_new_comment", WebChannel)}
+                {icon("event_notification_new_comment", EmailChannel)}
+              </HStack>
+            </div>
+            <div>
+              <div className="mb-1">
+                <Trans id="mysettings.notification.event.statuschanged">Status Changed</Trans>
+              </div>
+              {info(
                 "event_notification_change_status",
-                "status change on posts you've subscribed to",
-                "status change on all posts unless individually unsubscribed"
+                t({ id: "mysettings.notification.event.statuschanged.visitors", message: "status change on posts you've subscribed to" }),
+                t({ id: "mysettings.notification.event.statuschanged.staff", message: "status change on all posts unless individually unsubscribed" })
               )}
-              <p>
-                {this.icon("event_notification_change_status", WebChannel)}
-                {this.icon("event_notification_change_status", EmailChannel)}
-              </p>
-            </Segment>
-          </Segments>
+              <HStack spacing={6}>
+                {icon("event_notification_change_status", WebChannel)}
+                {icon("event_notification_change_status", EmailChannel)}
+              </HStack>
+            </div>
+          </VStack>
         </div>
-      </>
-    );
-  }
+      </Field>
+    </>
+  )
 }

@@ -1,118 +1,107 @@
-import React from "react";
-import { Button, ButtonClickEvent, Input, Form, TextArea, MultiImageUploader } from "@fider/components";
-import { SignInModal } from "@fider/components";
-import { cache, actions, Failure, Fider } from "@fider/services";
-import { ImageUpload } from "@fider/models";
+import React, { useState, useEffect, useRef } from "react"
+import { Button, ButtonClickEvent, Input, Form, TextArea, MultiImageUploader } from "@fider/components"
+import { SignInModal } from "@fider/components"
+import { cache, actions, Failure } from "@fider/services"
+import { ImageUpload } from "@fider/models"
+import { useFider } from "@fider/hooks"
+import { t } from "@lingui/macro"
 
 interface PostInputProps {
-  placeholder: string;
-  onTitleChanged: (title: string) => void;
+  placeholder: string
+  onTitleChanged: (title: string) => void
 }
 
-interface PostInputState {
-  title: string;
-  description: string;
-  attachments: ImageUpload[];
-  focused: boolean;
-  showSignIn: boolean;
-  error?: Failure;
-}
+const CACHE_TITLE_KEY = "PostInput-Title"
+const CACHE_DESCRIPTION_KEY = "PostInput-Description"
 
-const CACHE_TITLE_KEY = "PostInput-Title";
-const CACHE_DESCRIPTION_KEY = "PostInput-Description";
+export const PostInput = (props: PostInputProps) => {
+  const getCachedValue = (key: string): string => {
+    if (fider.session.isAuthenticated) {
+      return cache.session.get(key) || ""
+    }
+    return ""
+  }
 
-export class PostInput extends React.Component<PostInputProps, PostInputState> {
-  private title?: HTMLInputElement;
+  const fider = useFider()
+  const titleRef = useRef<HTMLInputElement>()
+  const [title, setTitle] = useState(getCachedValue(CACHE_TITLE_KEY))
+  const [description, setDescription] = useState(getCachedValue(CACHE_DESCRIPTION_KEY))
+  const [isSignInModalOpen, setIsSignInModalOpen] = useState(false)
+  const [attachments, setAttachments] = useState<ImageUpload[]>([])
+  const [error, setError] = useState<Failure | undefined>(undefined)
 
-  constructor(props: PostInputProps) {
-    super(props);
-    this.state = {
-      title: (Fider.session.isAuthenticated && cache.session.get(CACHE_TITLE_KEY)) || "",
-      description: (Fider.session.isAuthenticated && cache.session.get(CACHE_DESCRIPTION_KEY)) || "",
-      focused: false,
-      showSignIn: false,
-      attachments: []
-    };
+  useEffect(() => {
+    props.onTitleChanged(title)
+  }, [title])
 
-    if (this.state.title) {
-      this.props.onTitleChanged(this.state.title);
+  const handleTitleFocus = () => {
+    if (!fider.session.isAuthenticated && titleRef.current) {
+      titleRef.current.blur()
+      setIsSignInModalOpen(true)
     }
   }
 
-  private handleTitleFocus = () => {
-    if (!Fider.session.isAuthenticated && this.title) {
-      this.title.blur();
-      this.setState({ showSignIn: true });
-    }
-  };
+  const handleTitleChange = (value: string) => {
+    cache.session.set(CACHE_TITLE_KEY, value)
+    setTitle(value)
+    props.onTitleChanged(value)
+  }
 
-  private setTitle = (title: string) => {
-    cache.session.set(CACHE_TITLE_KEY, title);
-    this.setState({ title });
-    this.props.onTitleChanged(title);
-  };
+  const hideModal = () => setIsSignInModalOpen(false)
+  const clearError = () => setError(undefined)
 
-  private setDescription = (description: string) => {
-    cache.session.set(CACHE_DESCRIPTION_KEY, description);
-    this.setState({ description });
-  };
+  const handleDescriptionChange = (value: string) => {
+    cache.session.set(CACHE_DESCRIPTION_KEY, value)
+    setDescription(value)
+  }
 
-  private setAttachments = (attachments: ImageUpload[]) => {
-    this.setState({ attachments });
-  };
-
-  private submit = async (event: ButtonClickEvent) => {
-    if (this.state.title) {
-      const result = await actions.createPost(this.state.title, this.state.description, this.state.attachments);
+  const submit = async (event: ButtonClickEvent) => {
+    if (title) {
+      const result = await actions.createPost(title, description, attachments)
       if (result.ok) {
-        this.setState({ error: undefined });
-        cache.session.remove(CACHE_TITLE_KEY, CACHE_DESCRIPTION_KEY);
-        location.href = `/posts/${result.data.number}/${result.data.slug}`;
-        event.preventEnable();
+        clearError()
+        cache.session.remove(CACHE_TITLE_KEY, CACHE_DESCRIPTION_KEY)
+        location.href = `/posts/${result.data.number}/${result.data.slug}`
+        event.preventEnable()
       } else if (result.error) {
-        this.setState({ error: result.error });
+        setError(result.error)
       }
     }
-  };
-
-  private setInputRef = (e: HTMLInputElement) => {
-    this.title = e;
-  };
-
-  public render() {
-    const details = (
-      <>
-        <TextArea
-          field="description"
-          onChange={this.setDescription}
-          value={this.state.description}
-          minRows={5}
-          placeholder="Describe your suggestion (optional)"
-        />
-        <MultiImageUploader field="attachments" maxUploads={3} previewMaxWidth={100} onChange={this.setAttachments} />
-        <Button color="positive" onClick={this.submit}>
-          Submit
-        </Button>
-      </>
-    );
-
-    return (
-      <>
-        <SignInModal isOpen={this.state.showSignIn} />
-        <Form error={this.state.error}>
-          <Input
-            field="title"
-            noTabFocus={!Fider.session.isAuthenticated}
-            inputRef={this.setInputRef}
-            onFocus={this.handleTitleFocus}
-            maxLength={100}
-            value={this.state.title}
-            onChange={this.setTitle}
-            placeholder={this.props.placeholder}
-          />
-          {this.state.title && details}
-        </Form>
-      </>
-    );
   }
+
+  const details = () => (
+    <>
+      <TextArea
+        field="description"
+        onChange={handleDescriptionChange}
+        value={description}
+        minRows={5}
+        placeholder={t({ id: "home.postinput.description.placeholder", message: "Describe your suggestion (optional)" })}
+      />
+      <MultiImageUploader field="attachments" maxUploads={3} onChange={setAttachments} />
+      <Button type="submit" variant="primary" onClick={submit}>
+        Submit
+      </Button>
+    </>
+  )
+
+  return (
+    <>
+      <SignInModal isOpen={isSignInModalOpen} onClose={hideModal} />
+      <Form error={error}>
+        <Input
+          field="title"
+          disabled={fider.isReadOnly}
+          noTabFocus={!fider.session.isAuthenticated}
+          inputRef={titleRef}
+          onFocus={handleTitleFocus}
+          maxLength={100}
+          value={title}
+          onChange={handleTitleChange}
+          placeholder={props.placeholder}
+        />
+        {title && details()}
+      </Form>
+    </>
+  )
 }

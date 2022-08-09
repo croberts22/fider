@@ -2,82 +2,70 @@ package middlewares
 
 import (
 	"bufio"
-	"bytes"
 	"compress/gzip"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"strings"
-	"sync"
 
 	"github.com/getfider/fider/app/pkg/web"
 )
 
-var (
-	minSize = 1024
-)
-
 type gzipResponseWriter struct {
-	code     int
-	response http.ResponseWriter
-	writer   *gzip.Writer
-	buffer   *bytes.Buffer
+	io.Writer
+	http.ResponseWriter
 }
 
 // Compress returns a middleware which compresses HTTP response using gzip compression
 func Compress() web.MiddlewareFunc {
 	return func(next web.HandlerFunc) web.HandlerFunc {
-		var pool sync.Pool
-		pool.New = func() interface{} {
-			return gzip.NewWriter(ioutil.Discard)
-		}
 		return func(c *web.Context) error {
-			res := c.Response
 			if strings.Contains(c.Request.GetHeader("Accept-Encoding"), "gzip") {
-				writer := pool.Get().(*gzip.Writer)
-				defer pool.Put(writer)
-				gzipResponse := &gzipResponseWriter{response: res, writer: writer, buffer: &bytes.Buffer{}}
-				c.Response = gzipResponse
-				defer gzipResponse.Flush()
+				res := c.Response
+				res.Header().Set("Content-Encoding", "gzip")
+				res.Header().Del("Accept-Encoding")
+				res.Header().Add("Vary", "Accept-Encoding")
+
+				gw, _ := gzip.NewWriterLevel(res.Writer, gzip.DefaultCompression)
+
+				c.Response.Writer = &gzipResponseWriter{
+					Writer:         gw,
+					ResponseWriter: c.Response.Writer,
+				}
+
+				err := next(c)
+				gw.Close()
+				return err
 			}
 			return next(c)
 		}
 	}
 }
+
 func (w *gzipResponseWriter) Header() http.Header {
-	return w.response.Header()
+	return w.ResponseWriter.Header()
 }
 
 func (w *gzipResponseWriter) WriteHeader(code int) {
-	w.code = code
+	w.ResponseWriter.Header().Del("Content-Length")
+	w.ResponseWriter.WriteHeader(code)
+
 }
 
 func (w *gzipResponseWriter) Write(b []byte) (int, error) {
-	return w.buffer.Write(b)
-}
-
-func (w *gzipResponseWriter) Flush() {
-	w.Header().Add("Vary", "Accept-Encoding")
-	if w.buffer.Len() >= minSize {
-		w.Header().Del("Content-Length")
-		w.Header().Set("Content-Encoding", "gzip")
-		w.response.WriteHeader(w.code)
-		w.writer.Reset(w.response)
-		_, err := w.buffer.WriteTo(w.writer)
-		if err != nil {
-			panic(err)
-		}
-
-		w.writer.Close()
-	} else if w.code > 0 {
-		w.response.WriteHeader(w.code)
-		_, err := w.buffer.WriteTo(w.response)
-		if err != nil {
-			panic(err)
-		}
+	header := w.ResponseWriter.Header()
+	if header.Get("Content-Type") == "" {
+		header.Set("Content-Type", http.DetectContentType(b))
 	}
+	header.Del("Content-Length")
+
+	return w.Writer.Write(b)
 }
 
-func (w *gzipResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
-	return w.response.(http.Hijacker).Hijack()
+func (r gzipResponseWriter) Flush() {
+	r.Writer.(http.Flusher).Flush()
+}
+
+func (r gzipResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	return r.Writer.(http.Hijacker).Hijack()
 }

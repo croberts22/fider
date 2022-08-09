@@ -1,64 +1,50 @@
-import React from "react";
-import { classSet } from "@fider/services";
-import { ValidationContext } from "./Form";
-import { DisplayError, hasError } from "./DisplayError";
-import { IconType } from "react-icons";
+import React from "react"
+import { classSet } from "@fider/services"
+import { ValidationContext } from "./Form"
+import { DisplayError, hasError } from "./DisplayError"
+import { Icon } from "@fider/components"
+
+import "./Input.scss"
+import { HStack } from "@fider/components/layout"
 
 interface InputProps {
-  field: string;
-  label?: string;
-  className?: string;
-  autoComplete?: string;
-  autoFocus?: boolean;
-  noTabFocus?: boolean;
-  afterLabel?: JSX.Element;
-  icon?: IconType;
-  maxLength?: number;
-  value?: string;
-  disabled?: boolean;
-  suffix?: string | JSX.Element;
-  placeholder?: string;
-  onIconClick?: () => void;
-  onSubmit?: () => void;
-  onFocus?: () => void;
-  inputRef?: (node: HTMLInputElement) => void;
-  onChange?: (value: string) => void;
+  field: string
+  label?: string
+  className?: string
+  autoComplete?: string
+  autoFocus?: boolean
+  noTabFocus?: boolean
+  afterLabel?: JSX.Element
+  icon?: SpriteSymbol
+  maxLength?: number
+  value?: string
+  disabled?: boolean
+  suffix?: string | JSX.Element
+  placeholder?: string
+  onIconClick?: () => void
+  onFocus?: () => void
+  inputRef?: React.MutableRefObject<any>
+  onChange?: (value: string) => void
 }
 
-export const Input: React.FunctionComponent<InputProps> = props => {
+export const Input: React.FunctionComponent<InputProps> = (props) => {
   const onChange = (e: React.FormEvent<HTMLInputElement>) => {
     if (props.onChange) {
-      props.onChange(e.currentTarget.value);
+      props.onChange(e.currentTarget.value)
     }
-  };
+  }
 
-  const onKeyDown = (event: React.KeyboardEvent<HTMLInputElement>): void => {
-    if (event.keyCode === 13 && props.onSubmit) {
-      props.onSubmit();
-      event.preventDefault();
-    }
-  };
+  const suffix = typeof props.suffix === "string" ? <span className="c-input__suffix">{props.suffix}</span> : props.suffix
 
-  const suffix =
-    typeof props.suffix === "string" ? <span className="c-form-input-suffix">{props.suffix}</span> : props.suffix;
-
-  const icon = !!props.icon
-    ? React.createElement(props.icon, {
-        onClick: props.onIconClick,
-        className: classSet({ link: !!props.onIconClick })
-      })
-    : undefined;
+  const icon = props.icon ? <Icon sprite={props.icon} onClick={props.onIconClick} className={classSet({ clickable: !!props.onIconClick })} /> : undefined
 
   return (
     <ValidationContext.Consumer>
-      {ctx => (
+      {(ctx) => (
         <div
           className={classSet({
             "c-form-field": true,
-            "m-suffix": props.suffix,
-            "m-error": hasError(props.field, ctx.error),
-            "m-icon": !!props.icon,
-            [`${props.className}`]: props.className
+            [`${props.className}`]: props.className,
           })}
         >
           {!!props.label && (
@@ -67,8 +53,14 @@ export const Input: React.FunctionComponent<InputProps> = props => {
               {props.afterLabel}
             </label>
           )}
-          <div className="c-form-field-wrapper">
+          <HStack spacing={0} center={!!props.icon} className="relative">
             <input
+              className={classSet({
+                "c-input": true,
+                "c-input--icon": !!props.icon,
+                "c-input--error": hasError(props.field, ctx.error),
+                "c-input--suffixed": !!suffix,
+              })}
               id={`input-${props.field}`}
               type="text"
               autoComplete={props.autoComplete}
@@ -80,16 +72,15 @@ export const Input: React.FunctionComponent<InputProps> = props => {
               disabled={props.disabled}
               value={props.value}
               placeholder={props.placeholder}
-              onKeyDown={props.onSubmit ? onKeyDown : undefined}
               onChange={onChange}
             />
             {icon}
             {suffix}
-          </div>
+          </HStack>
           <DisplayError fields={[props.field]} error={ctx.error} />
           {props.children}
         </div>
       )}
     </ValidationContext.Consumer>
-  );
-};
+  )
+}

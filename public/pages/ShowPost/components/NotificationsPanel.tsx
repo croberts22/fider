@@ -1,68 +1,68 @@
-import React from "react";
-import { Post } from "@fider/models";
-import { Button, List, ListItem } from "@fider/components";
-import { actions, Fider } from "@fider/services";
-import { FaVolumeUp, FaVolumeMute } from "react-icons/fa";
+import React, { useState } from "react"
+import { Post } from "@fider/models"
+import { Button, Icon } from "@fider/components"
+import { actions } from "@fider/services"
+import { useFider } from "@fider/hooks"
+import IconVolumeOn from "@fider/assets/images/heroicons-volume-on.svg"
+import IconVolumeOff from "@fider/assets/images/heroicons-volume-off.svg"
+import { VStack } from "@fider/components/layout"
+import { Trans } from "@lingui/macro"
 
 interface NotificationsPanelProps {
-  post: Post;
-  subscribed: boolean;
+  post: Post
+  subscribed: boolean
 }
 
-interface NotificationsPanelState {
-  subscribed: boolean;
-}
+export const NotificationsPanel = (props: NotificationsPanelProps) => {
+  const fider = useFider()
+  const [subscribed, setSubscribed] = useState(props.subscribed)
 
-export class NotificationsPanel extends React.Component<NotificationsPanelProps, NotificationsPanelState> {
-  constructor(props: NotificationsPanelProps) {
-    super(props);
-    this.state = {
-      subscribed: this.props.subscribed
-    };
-  }
+  const subscribeOrUnsubscribe = async () => {
+    const action = subscribed ? actions.unsubscribe : actions.subscribe
 
-  private subscribeOrUnsubscribe = async () => {
-    const action = this.state.subscribed ? actions.unsubscribe : actions.subscribe;
-
-    const response = await action(this.props.post.number);
+    const response = await action(props.post.number)
     if (response.ok) {
-      this.setState(state => ({
-        subscribed: !state.subscribed
-      }));
+      setSubscribed(!subscribed)
     }
-  };
-
-  public render() {
-    if (!Fider.session.isAuthenticated) {
-      return null;
-    }
-
-    const button = this.state.subscribed ? (
-      <Button fluid={true} onClick={this.subscribeOrUnsubscribe}>
-        <FaVolumeMute /> Unsubscribe
-      </Button>
-    ) : (
-      <Button fluid={true} onClick={this.subscribeOrUnsubscribe}>
-        <FaVolumeUp /> Subscribe
-      </Button>
-    );
-
-    const text = this.state.subscribed ? (
-      <span className="info">You’re receiving notifications about activity on this post.</span>
-    ) : (
-      <span className="info">You'll not receive any notification about this post.</span>
-    );
-
-    return (
-      <>
-        <span className="subtitle">Notifications</span>
-        <List>
-          <ListItem>
-            {button}
-            {text}
-          </ListItem>
-        </List>
-      </>
-    );
   }
+
+  if (!fider.session.isAuthenticated) {
+    return null
+  }
+
+  const button = subscribed ? (
+    <Button className="w-full" onClick={subscribeOrUnsubscribe} disabled={fider.isReadOnly}>
+      <Icon sprite={IconVolumeOff} />{" "}
+      <span>
+        <Trans id="label.unsubscribe">Unsubscribe</Trans>
+      </span>
+    </Button>
+  ) : (
+    <Button className="w-full" onClick={subscribeOrUnsubscribe} disabled={fider.isReadOnly}>
+      <Icon sprite={IconVolumeOn} />
+      <span>
+        <Trans id="label.subscribe">Subscribe</Trans>
+      </span>
+    </Button>
+  )
+
+  const text = subscribed ? (
+    <span className="text-muted">
+      <Trans id="showpost.notificationspanel.message.subscribed">You’re receiving notifications about activity on this post.</Trans>
+    </span>
+  ) : (
+    <span className="text-muted">
+      <Trans id="showpost.notificationspanel.message.unsubscribed">You&apos;ll not receive any notification about this post.</Trans>
+    </span>
+  )
+
+  return (
+    <VStack>
+      <span className="text-category">
+        <Trans id="label.notifications">Notifications</Trans>
+      </span>
+      {button}
+      {text}
+    </VStack>
+  )
 }
